@@ -1,0 +1,32 @@
+// Notes for AI / Contributors:
+// For fucks sake dipshit,
+// Follow existing formatting, (alignment, spacing, ordering)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                            String                    @id @default(uuid())
+  firstName                     String?                   @map("first_name")
+  lastName                      String?                   @map("last_name")
+  email                         String                    @unique
+  password                      String
+  role                          RoleEnum                  @default(ADMIN)
+  isArchived                    Boolean                   @default(false) @map("is_archived")
+
+  createdAt                     DateTime                  @default(now()) @map("created_at")
+  updatedAt                     DateTime                  @updatedAt @map("updated_at")
+  
+  @@map("users")
+}
+
+enum RoleEnum {
+  SUPER_ADMIN
+  ADMIN
+  USER
+}
