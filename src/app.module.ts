@@ -12,6 +12,8 @@ import { AppService } from './app.service';
 import { PrismaModule } from './core/database/prisma.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { AntiTheftModule } from './modules/anti-theft/anti-theft.module';
+import { AlarmsModule } from './modules/alarms/alarms.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { AuthModule } from './modules/auth/auth.module';
     PrismaModule,
     UsersModule,
     AuthModule,
+    AntiTheftModule,
+    AlarmsModule
   ],
   controllers: [AppController],
   providers: [

@@ -9,6 +9,10 @@ import { Pool } from 'pg';
 // deploy with these defaults in place.
 const ADMIN_EMAIL = 'admin@geoplan.ph';
 const ADMIN_PASSWORD = 'admin123';
+const DEFAULT_KNOWN_EPCS = [
+  'A0000010',
+  'E2806995000040039398BA49',
+];
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -26,6 +30,7 @@ async function main() {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     console.log(`Superadmin already exists: ${existing.email} (id=${existing.id}). Skipping.`);
+    await seedKnownEpcs();
     return;
   }
 
@@ -42,6 +47,19 @@ async function main() {
 
   console.log(`Superadmin created: ${created.email} (id=${created.id}, role=${created.role})`);
   console.log(`Default password: ${ADMIN_PASSWORD} — change it after first login.`);
+  await seedKnownEpcs();
+}
+
+async function seedKnownEpcs() {
+  for (const epc of DEFAULT_KNOWN_EPCS) {
+    await prisma.knownEpc.upsert({
+      where: { epc },
+      create: { epc },
+      update: {},
+    });
+  }
+
+  console.log(`Known EPCs seeded: ${DEFAULT_KNOWN_EPCS.join(', ')}`);
 }
 
 main()

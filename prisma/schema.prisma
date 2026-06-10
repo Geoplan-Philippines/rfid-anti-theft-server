@@ -25,6 +25,30 @@ model User {
   @@map("users")
 }
 
+model KnownEpc {
+  id                            String                    @id @default(uuid())
+  epc                           String                    @unique
+  label                         String?
+
+  createdAt                     DateTime                  @default(now()) @map("created_at")
+  updatedAt                     DateTime                  @updatedAt @map("updated_at")
+
+  @@map("known_epcs")
+}
+
+model AlarmEvent {
+  id                            String                    @id @default(uuid())
+  epc                           String
+  readerName                    String?                   @map("reader_name")
+  scannedAt                     DateTime?                 @map("scanned_at")
+
+  createdAt                     DateTime                  @default(now()) @map("created_at")
+
+  @@index([epc])
+  @@index([scannedAt])
+  @@map("alarm_events")
+}
+
 enum RoleEnum {
   SUPER_ADMIN
   ADMIN
