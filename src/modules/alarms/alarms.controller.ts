@@ -19,7 +19,7 @@ export class AlarmsController {
   @Post()
   async receiveAlarm(
     @Body() body: ReceiveAlarmDto,
-  ): Promise<{ ok: boolean; message: string; id: string }> {
+  ): Promise<{ ok: boolean; message: string; id: string; captured: boolean }> {
     return this.alarmsService.receiveAlarm(body);
   }
 }

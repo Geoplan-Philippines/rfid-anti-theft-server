@@ -13,6 +13,10 @@ const schema = z.object({
     .transform((s) => s.split(',').map((o) => o.trim()).filter(Boolean)),
 
   JWT_SECRET: z.string().min(32),
+
+  CCTV_SNAPSHOT_URL: z.string().url().optional(),
+  CCTV_USERNAME: z.string().optional(),
+  CCTV_PASSWORD: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

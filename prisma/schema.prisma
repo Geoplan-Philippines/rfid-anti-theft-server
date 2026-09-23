@@ -41,6 +41,7 @@ model AlarmEvent {
   epc                           String
   readerName                    String?                   @map("reader_name")
   scannedAt                     DateTime?                 @map("scanned_at")
+  captureImageUrl               String?                   @map("capture_image_url")
 
   createdAt                     DateTime                  @default(now()) @map("created_at")
 

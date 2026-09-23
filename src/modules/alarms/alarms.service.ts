@@ -1,22 +1,43 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { AlarmEvent, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../core/database/prisma.service';
 import type { PaginatedResponse } from '../../common/responses/paginated-api.response';
 import { ListAlarmEventsQueryDto } from './dto/list-alarm-events-query.dto';
 import { ReceiveAlarmDto } from './dto/receive-alarm.dto';
+import { CctvCaptureService } from './cctv-capture.service';
 
 @Injectable()
 export class AlarmsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(AlarmsService.name);
 
-  async receiveAlarm(body: ReceiveAlarmDto): Promise<{ ok: boolean; message: string; id: string }> {
-    const event = await this.recordAlarmEvent(body);
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cctvCapture: CctvCaptureService,
+  ) {}
+
+  async receiveAlarm(body: ReceiveAlarmDto): Promise<{ ok: boolean; message: string; id: string; captured: boolean }> {
+    const normalizedEpc = this.normalizeEpc(body.epc);
+
+    // Check if this EPC is whitelisted
+    const isWhitelisted = await this.isEpcWhitelisted(normalizedEpc);
+
+    let captureImageUrl: string | null = null;
+
+    if (!isWhitelisted) {
+      this.logger.warn(`Unwhitelisted EPC detected: ${normalizedEpc} — triggering CCTV capture`);
+      captureImageUrl = await this.cctvCapture.captureSnapshot(normalizedEpc);
+    } else {
+      this.logger.log(`Whitelisted EPC scanned: ${normalizedEpc} — no capture needed`);
+    }
+
+    const event = await this.recordAlarmEvent(body, normalizedEpc, captureImageUrl);
 
     return {
       ok: true,
-      message: 'Alarm received',
+      message: isWhitelisted ? 'Whitelisted tag — logged only' : 'Unwhitelisted tag — alarm triggered & captured',
       id: event.id,
+      captured: !isWhitelisted && captureImageUrl !== null,
     };
   }
 
@@ -47,12 +68,26 @@ export class AlarmsService {
     };
   }
 
-  private recordAlarmEvent(body: ReceiveAlarmDto): Promise<AlarmEvent> {
+  private async isEpcWhitelisted(normalizedEpc: string): Promise<boolean> {
+    const found = await this.prisma.knownEpc.findUnique({
+      where: { epc: normalizedEpc },
+      select: { id: true },
+    });
+
+    return found !== null;
+  }
+
+  private recordAlarmEvent(
+    body: ReceiveAlarmDto,
+    normalizedEpc: string,
+    captureImageUrl: string | null,
+  ): Promise<AlarmEvent> {
     return this.prisma.alarmEvent.create({
       data: {
-        epc: this.normalizeEpc(body.epc),
+        epc: normalizedEpc,
         readerName: body.readerName?.trim() || null,
         scannedAt: body.scannedAt ? new Date(body.scannedAt) : null,
+        captureImageUrl,
       },
     });
   }
