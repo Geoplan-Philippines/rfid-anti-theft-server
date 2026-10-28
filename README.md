@@ -1,140 +1,89 @@
-# Backend Core Development Kit
+# MUJI EAS server
 
-> Internal use — **Geoplan Philippines**
+This server records RFID tags sold at MUJI and decides which tags pass the gate.
 
-NestJS template w/ PostgreSQL (Prisma) + Passport.js JWT auth. Cloneable starting point for dashboard-type projects.
+A cashier widget posts one sale to `POST /api/v1/transactions`. Every EPC in that sale is added to `known_epcs`. `known_epcs` is the sold list. A tag on that list passes the gate. Any other tag raises an alarm.
 
-Template: `nestjs-postgres-passport`
+Dashboard reads of the sold list and of transactions require a JWT. Three routes stay open until a per-device key exists.
 
-## What's Included
+- `POST /api/v1/transactions`
+- `POST /api/v1/alarms`
+- `GET /api/v1/anti-theft/known-epcs`
 
-- NestJS 11 + TypeScript
-- **PostgreSQL** via Prisma ORM (`@prisma/adapter-pg`)
-- **JWT auth** via Passport.js (`passport-jwt`, `passport-local`)
-- `bcrypt` password hashing
-- Basic security: `helmet`, CORS allowlist, rate limiting via `@nestjs/throttler` (global 100 req / 60s, `/auth/login` tightened to 5 req / 60s, health endpoints skipped)
-- Zod-validated env config (`src/core/config/env.config.ts`)
-- Global `ValidationPipe` registered via `APP_PIPE` (whitelist + forbidNonWhitelisted + transform) — also active in test modules
-- Global response interceptor — wraps payloads as `{ statusCode, message, data }`
-- Global HTTP exception filter — handles `HttpException` + Prisma `P2002` / `P2025` / `P2003`
-- Health check via `@nestjs/terminus`:
-    - `GET /api/v1/health` — DB ping
-- API prefix: `api/v1`
-- bun as package manager
+The widget contract is `docs/widget-api.md`.
 
-## What's NOT Included (by design)
-
-- No social/OAuth login
-- No magic link / passwordless
-- No refresh tokens — access token is 30d (acceptable for single-admin / very low-user scenarios)
-- No Swagger/OpenAPI
-- No role/permission system
-- No payment integration
-- No business modules
-
-## When To Use This Template
-
-Use when:
-- Small-scale internal dashboard (1–10 concurrent users)
-- Simple email/password auth is sufficient
-- No social login or advanced session management needed
-- Long-lived single-admin session is acceptable
-
-Use the Postgres + Better Auth template instead when OAuth, magic links, refresh tokens, or richer session management are needed.
-
-## Quick Start
+## Run
 
 ```bash
-git clone -b nestjs-postgres-passport https://github.com/Geoplan-Philippines/backend-boilerplate <project-name>
-cd <project-name>
 bun install
 cp .env.example .env
-# fill in DATABASE_URL and JWT_SECRET (min 32 chars)
-bunx prisma migrate dev
-bunx prisma db seed     # creates the first SUPER_ADMIN (defaults in prisma/seed.ts)
+bunx prisma migrate deploy
+bunx prisma db seed
 bun run start:dev
 ```
 
-Then:
-1. Rename the project in `package.json`
-2. Define your schema in `prisma/schema.prisma` and re-run `bunx prisma migrate dev`
-3. Build features under `src/modules`
-
-Server: `http://localhost:8000/api/v1`
-
-Verify setup — hit the health check:
+Fill in `DATABASE_URL` and `JWT_SECRET` before `migrate deploy`. `JWT_SECRET` must be at least 32 characters. The API prefix is `/api/v1`. The listen port is `PORT`.
 
 ```bash
 curl http://localhost:8000/api/v1/health
 ```
 
-Healthy: `{ "statusCode": 200, "message": "Success", "data": { "status": "ok", ... } }`
+A healthy body has `"statusCode": 200` and `data.status` set to `ok`. `data.info.database.status` is `up`.
 
 ## Environment
 
-See `.env.example`:
-- `NODE_ENV`, `PORT`
-- `DATABASE_URL` — PostgreSQL connection string
-- `JWT_SECRET` — secret for signing JWT tokens (min 32 chars)
-- `CORS_ALLOWED_ORIGINS` (comma-separated)
+Names match `src/core/config/env.config.ts` and `.env.example`.
 
-## Seeding
+- `NODE_ENV`
+- `PORT`
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `CORS_ALLOWED_ORIGINS`
+- `CCTV_SNAPSHOT_URL`, optional
+- `CCTV_USERNAME`, optional
+- `CCTV_PASSWORD`, optional
 
-The app has no `/auth/register` endpoint by design — the first user is created via seed, and every subsequent user is created by an authenticated admin through `POST /api/v1/users`.
+Leave the three CCTV keys commented until a camera is configured. Do not set `CCTV_SNAPSHOT_URL` to an empty string. When that key is present, the value has to be a URL.
 
-```bash
-bunx prisma db seed
-```
+## First user
 
-Runs `prisma/seed.ts` (configured in `prisma.config.ts`). The default credentials are hardcoded in `prisma/seed.ts`:
+There is no registration route. `bunx prisma db seed` creates the first user from `prisma/seed.ts`. Change the password after login. If that email already exists, the seed does not replace the password. Later users are created by a signed-in admin at `POST /api/v1/users`.
 
-| Field | Default |
-|---|---|
-| Email | `admin@geoplan.ph` |
-| Password | `ChangeMeNow123!` |
-| Role | `SUPER_ADMIN` |
+## Routes
 
-**Change the password immediately after first login.** Idempotent: if a user with that email already exists, the seed exits without changes — it will **not** overwrite an existing password.
+| Method | Path | Who can call it |
+| --- | --- | --- |
+| POST | `/api/v1/auth/login` | Open, rate limited |
+| GET | `/api/v1/auth/me` | JWT |
+| POST | `/api/v1/transactions` | Open until a per-device key exists |
+| GET | `/api/v1/transactions` | JWT |
+| GET | `/api/v1/transactions/:id` | JWT |
+| POST | `/api/v1/alarms` | Open until a per-device key exists |
+| GET | `/api/v1/alarms` | JWT |
+| GET | `/api/v1/anti-theft/known-epcs` | Open until a per-device key exists |
+| GET, POST | `/api/v1/anti-theft/epcs` | JWT |
+| GET, PATCH, DELETE | `/api/v1/anti-theft/epcs/:id` | JWT |
 
-## Auth Endpoints
-
-| Method | Path | Guard | Description |
-|---|---|---|---|
-| POST | `/api/v1/auth/login` | `passport-local` | Returns access token |
-| GET  | `/api/v1/auth/me` | `passport-jwt` | Returns fresh user from DB |
-| POST | `/api/v1/users` | `passport-jwt` | Admin-create user |
-| GET  | `/api/v1/users` | `passport-jwt` | List users |
-| GET  | `/api/v1/users/:id` | `passport-jwt` | Get user by id |
+Successful JSON is `{ "statusCode", "message": "Success", "data" }`. List routes put `{ "total", "page", "limit", "lastPage" }` on `data.meta`.
 
 ## Scripts
 
-See `scripts` in `package.json`. Run with `bun run <name>`.
+Run the `scripts` in `package.json` with `bun run`.
 
-## Folder Structure
+## Layout
 
 ```
 src/
-  common/
-    dto/             # shared DTOs (pagination, etc.)
-    filters/         # global exception filter (incl. Prisma error mapping)
-    interceptors/    # global response interceptor
-    responses/       # response type shapes
-  core/
-    config/          # zod-validated env config
-    database/        # PrismaService + module (global)
-    health/          # health checks
-    security/        # rate-limit module (throttler)
+  common/          filters, the response interceptor, pagination
+  core/            env, Prisma, health, rate limit
   modules/
-    auth/            # Passport strategies, guards, controller, DTOs, types
-    users/           # users service + controller + DTOs + types
-  app.module.ts
-  main.ts
+    alarms/        gate alarms
+    anti-theft/    known_epcs, the sold list
+    auth/
+    transactions/  cashier sales
+    users/
 prisma/
-  schema.prisma      # DB schema
-  migrations/        # migration history
-prisma.config.ts     # prisma 7 config
+  schema.prisma
+  migrations/
+  seed.ts
 ```
-
----
-
-Maintained by Geoplan Philippines. Internal use only.

@@ -14,6 +14,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AntiTheftModule } from './modules/anti-theft/anti-theft.module';
 import { AlarmsModule } from './modules/alarms/alarms.module';
+import { TransactionsModule } from './modules/transactions/transactions.module';
 
 @Module({
   imports: [
@@ -23,7 +24,8 @@ import { AlarmsModule } from './modules/alarms/alarms.module';
     UsersModule,
     AuthModule,
     AntiTheftModule,
-    AlarmsModule
+    AlarmsModule,
+    TransactionsModule,
   ],
   controllers: [AppController],
   providers: [

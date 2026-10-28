@@ -50,6 +50,41 @@ model AlarmEvent {
   @@map("alarm_events")
 }
 
+// A retry must return the original alreadySoldEpcs and duplicateEpcsIgnored. After commit those EPCs are on known_epcs, so recomputing would change the result.
+model Transaction {
+  id                            String                    @id @default(uuid())
+  clientTransactionId           String                    @unique @map("client_transaction_id")
+  storeCode                     String                    @map("store_code")
+  deviceId                      String                    @map("device_id")
+  cashierName                   String?                   @map("cashier_name")
+  startedAt                     DateTime                  @map("started_at")
+  endedAt                       DateTime                  @map("ended_at")
+  itemCount                     Int                       @map("item_count")
+  duplicateEpcsIgnored          Int                       @map("duplicate_epcs_ignored")
+  alreadySoldEpcs               String[]                  @map("already_sold_epcs")
+
+  createdAt                     DateTime                  @default(now()) @map("created_at")
+
+  tags                          TransactionTag[]
+
+  @@index([startedAt])
+  @@index([storeCode])
+  @@map("transactions")
+}
+
+model TransactionTag {
+  id                            String                    @id @default(uuid())
+  transactionId                 String                    @map("transaction_id")
+  epc                           String
+  scannedAt                     DateTime                  @map("scanned_at")
+
+  transaction                   Transaction               @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@unique([transactionId, epc])
+  @@index([epc])
+  @@map("transaction_tags")
+}
+
 enum RoleEnum {
   SUPER_ADMIN
   ADMIN

@@ -7,30 +7,38 @@ import { Pool } from 'pg';
 // Default bootstrap superadmin. Change the password via the running app
 // (or delete the row and re-seed) immediately after first login. Do NOT
 // deploy with these defaults in place.
-const ADMIN_EMAIL = 'admin@geoplan.ph';
-const ADMIN_PASSWORD = 'admin123';
+export const ADMIN_EMAIL = 'admin@geoplan.ph';
+export const ADMIN_PASSWORD = 'admin123';
 const DEFAULT_KNOWN_EPCS = [
   'A0000010',
   'E2806995000040039398BA49',
 ];
 
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  console.error('Missing DATABASE_URL in environment.');
-  process.exit(1);
+async function main() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    console.error('Missing DATABASE_URL in environment.');
+    process.exit(1);
+  }
+
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg(new Pool({ connectionString: databaseUrl })),
+  });
+
+  try {
+    await seedAdmin(prisma);
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
-const prisma = new PrismaClient({
-  adapter: new PrismaPg(new Pool({ connectionString: DATABASE_URL })),
-});
-
-async function main() {
+async function seedAdmin(prisma: PrismaClient) {
   const email = ADMIN_EMAIL.trim().toLowerCase();
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     console.log(`Superadmin already exists: ${existing.email} (id=${existing.id}). Skipping.`);
-    await seedKnownEpcs();
+    await seedKnownEpcs(prisma);
     return;
   }
 
@@ -47,10 +55,10 @@ async function main() {
 
   console.log(`Superadmin created: ${created.email} (id=${created.id}, role=${created.role})`);
   console.log(`Default password: ${ADMIN_PASSWORD} — change it after first login.`);
-  await seedKnownEpcs();
+  await seedKnownEpcs(prisma);
 }
 
-async function seedKnownEpcs() {
+async function seedKnownEpcs(prisma: PrismaClient) {
   for (const epc of DEFAULT_KNOWN_EPCS) {
     await prisma.knownEpc.upsert({
       where: { epc },
@@ -62,11 +70,14 @@ async function seedKnownEpcs() {
   console.log(`Known EPCs seeded: ${DEFAULT_KNOWN_EPCS.join(', ')}`);
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
+function isSeedEntryPoint(): boolean {
+  const entry = process.argv[1]?.replaceAll('\\', '/') ?? '';
+  return entry.endsWith('prisma/seed.ts') || entry.endsWith('prisma/seed.js');
+}
+
+if (isSeedEntryPoint()) {
+  main().catch((error: unknown) => {
+    console.error(error);
     process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
   });
+}
