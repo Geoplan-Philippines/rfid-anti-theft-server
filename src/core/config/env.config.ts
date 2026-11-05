@@ -17,6 +17,8 @@ const schema = z.object({
   CCTV_SNAPSHOT_URL: z.string().url().optional(),
   CCTV_USERNAME: z.string().optional(),
   CCTV_PASSWORD: z.string().optional(),
+
+  ALARM_COOLDOWN_SECONDS: z.coerce.number().int().positive().max(86_400).default(30),
 });
 
 const parsed = schema.safeParse(process.env);

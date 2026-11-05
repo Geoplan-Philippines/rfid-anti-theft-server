@@ -2,7 +2,7 @@
 
 This server records RFID tags sold at MUJI and decides which tags pass the gate.
 
-A cashier widget posts one sale to `POST /api/v1/transactions`. Every EPC in that sale is added to `known_epcs`. `known_epcs` is the sold list. A tag on that list passes the gate. Any other tag raises an alarm.
+A cashier widget posts one sale to `POST /api/v1/transactions`. Every EPC in that sale is added to `known_epcs`. `known_epcs` is the sold list. A tag on that list passes the gate. Any other tag raises an alarm. A gate posts every tag it reads to `POST /api/v1/alarms`. A sold tag leaves no trace, and a tag that reads again inside `ALARM_COOLDOWN_SECONDS` does not raise a second alarm.
 
 Dashboard reads of the sold list and of transactions require a JWT. Three routes stay open until a per-device key exists.
 
@@ -10,7 +10,7 @@ Dashboard reads of the sold list and of transactions require a JWT. Three routes
 - `POST /api/v1/alarms`
 - `GET /api/v1/anti-theft/known-epcs`
 
-The widget contract is `docs/widget-api.md`.
+The widget contract is `docs/widget-api.md`. The gate contract is `docs/gate-alarm-api.md`.
 
 ## Run
 
@@ -39,9 +39,12 @@ Names match `src/core/config/env.config.ts` and `.env.example`.
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `CORS_ALLOWED_ORIGINS`
+- `ALARM_COOLDOWN_SECONDS`, optional, default 30
 - `CCTV_SNAPSHOT_URL`, optional
 - `CCTV_USERNAME`, optional
 - `CCTV_PASSWORD`, optional
+
+`ALARM_COOLDOWN_SECONDS` is a whole number from 1 to 86400. After an alarm for an EPC, the server writes no second alarm and takes no second snapshot for that EPC until that many seconds pass. This holds whichever gate reads the tag.
 
 Leave the three CCTV keys commented until a camera is configured. Do not set `CCTV_SNAPSHOT_URL` to an empty string. When that key is present, the value has to be a URL.
 
@@ -58,7 +61,7 @@ There is no registration route. `bunx prisma db seed` creates the first user fro
 | POST | `/api/v1/transactions` | Open until a per-device key exists |
 | GET | `/api/v1/transactions` | JWT |
 | GET | `/api/v1/transactions/:id` | JWT |
-| POST | `/api/v1/alarms` | Open until a per-device key exists |
+| POST | `/api/v1/alarms` | Open until a per-device key exists, 600 requests per minute per IP |
 | GET | `/api/v1/alarms` | JWT |
 | GET | `/api/v1/anti-theft/known-epcs` | Open until a per-device key exists |
 | GET, POST | `/api/v1/anti-theft/epcs` | JWT |

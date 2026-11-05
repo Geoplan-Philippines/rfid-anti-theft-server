@@ -7,7 +7,7 @@ import { Pool } from 'pg';
 // Default bootstrap superadmin. Change the password via the running app
 // (or delete the row and re-seed) immediately after first login. Do NOT
 // deploy with these defaults in place.
-export const ADMIN_EMAIL = 'admin@geoplan.ph';
+export const ADMIN_EMAIL = 'admin@geoplanph.com';
 export const ADMIN_PASSWORD = 'admin123';
 const DEFAULT_KNOWN_EPCS = [
   'A0000010',
