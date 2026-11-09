@@ -8,6 +8,10 @@ No `Authorization` header.
 
 Post every read, about every 3 seconds while a tag stays in range. Do not filter repeats in the gate app. The server does that.
 
+This route can take about 10 seconds to answer an unsold tag, because it waits for the camera. To decide whether the
+gate itself should sound, use [`POST /api/v1/anti-theft/known-epcs/check`](gate-sold-check-api.md) instead. It only
+reads the sold list.
+
 ## Request
 
 ```json

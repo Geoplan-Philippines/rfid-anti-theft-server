@@ -1,11 +1,18 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { KnownEpc } from '@prisma/client';
 import type { PaginatedResponse } from '../../common/responses/paginated-api.response';
 import { PassportJwtGuard } from '../auth/guards/passport-jwt.guard';
-import { AntiTheftService } from './anti-theft.service';
+import { AntiTheftService, type KnownEpcCheckResult } from './anti-theft.service';
+import { CheckKnownEpcsDto } from './dto/check-known-epcs.dto';
 import { CreateKnownEpcDto } from './dto/create-known-epc.dto';
 import { ListKnownEpcsQueryDto } from './dto/list-known-epcs-query.dto';
 import { UpdateKnownEpcDto } from './dto/update-known-epc.dto';
+
+// The gate bridge checks every tag packet before deciding whether the gate sounds, at most one check in flight per
+// gate. Several busy gates share one bridge IP, so this route gets more than the global 100 per minute.
+const GATE_CHECK_LIMIT_PER_MINUTE = 3000;
+const ONE_MINUTE_MS = 60_000;
 
 @Controller('anti-theft')
 export class AntiTheftController {
@@ -16,6 +23,16 @@ export class AntiTheftController {
   async getKnownEpcs(): Promise<{ knownEpcs: string[] }> {
     return {
       knownEpcs: await this.antiTheftService.getKnownEpcs(),
+    };
+  }
+
+  // TODO: replace this open route with a per-device key once the widget and the gate bridge can log in.
+  @Post('known-epcs/check')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: GATE_CHECK_LIMIT_PER_MINUTE, ttl: ONE_MINUTE_MS } })
+  async checkKnownEpcs(@Body() body: CheckKnownEpcsDto): Promise<{ results: KnownEpcCheckResult[] }> {
+    return {
+      results: await this.antiTheftService.checkKnownEpcs(body.epcs),
     };
   }
 

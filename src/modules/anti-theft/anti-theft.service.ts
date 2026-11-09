@@ -7,6 +7,11 @@ import { CreateKnownEpcDto } from './dto/create-known-epc.dto';
 import { ListKnownEpcsQueryDto } from './dto/list-known-epcs-query.dto';
 import { UpdateKnownEpcDto } from './dto/update-known-epc.dto';
 
+export type KnownEpcCheckResult = {
+  epc: string;
+  sold: boolean;
+};
+
 @Injectable()
 export class AntiTheftService {
   constructor(private readonly prisma: PrismaService) {}
@@ -18,6 +23,18 @@ export class AntiTheftService {
     });
 
     return rows.map((row) => row.epc);
+  }
+
+  // Read-only: sold means a known_epcs row exists, the same rule POST /alarms uses. One query, no writes, no capture.
+  async checkKnownEpcs(epcs: string[]): Promise<KnownEpcCheckResult[]> {
+    const uniqueEpcs = [...new Set(epcs.map((epc) => this.normalizeEpc(epc)))];
+    const rows = await this.prisma.knownEpc.findMany({
+      where: { epc: { in: uniqueEpcs } },
+      select: { epc: true },
+    });
+    const soldEpcs = new Set(rows.map((row) => row.epc));
+
+    return uniqueEpcs.map((epc) => ({ epc, sold: soldEpcs.has(epc) }));
   }
 
   async getEpcRecords(query: ListKnownEpcsQueryDto): Promise<PaginatedResponse<KnownEpc>> {
