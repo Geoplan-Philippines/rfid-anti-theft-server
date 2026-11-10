@@ -2,12 +2,15 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post
 import { Throttle } from '@nestjs/throttler';
 import type { KnownEpc } from '@prisma/client';
 import type { PaginatedResponse } from '../../common/responses/paginated-api.response';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PassportJwtGuard } from '../auth/guards/passport-jwt.guard';
-import { AntiTheftService, type KnownEpcCheckResult } from './anti-theft.service';
+import type { AuthenticatedUser } from '../auth/types/auth.types';
+import { AntiTheftService, type KnownEpcCheckResult, type UnsellResult } from './anti-theft.service';
 import { CheckKnownEpcsDto } from './dto/check-known-epcs.dto';
 import { CreateKnownEpcDto } from './dto/create-known-epc.dto';
 import { ListKnownEpcsQueryDto } from './dto/list-known-epcs-query.dto';
 import { UpdateKnownEpcDto } from './dto/update-known-epc.dto';
+import { UnsellEpcsDto } from './dto/unsell-epcs.dto';
 
 // The gate bridge checks every tag packet before deciding whether the gate sounds, at most one check in flight per
 // gate. Several busy gates share one bridge IP, so this route gets more than the global 100 per minute.
@@ -52,6 +55,15 @@ export class AntiTheftController {
   @UseGuards(PassportJwtGuard)
   async createEpcRecord(@Body() body: CreateKnownEpcDto): Promise<KnownEpc> {
     return this.antiTheftService.createEpcRecord(body);
+  }
+
+  @Post('epcs/unsell')
+  @UseGuards(PassportJwtGuard)
+  async unsellEpcs(
+    @Body() body: UnsellEpcsDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<UnsellResult> {
+    return this.antiTheftService.unsellEpcs(body, user);
   }
 
   @Patch('epcs/:id')

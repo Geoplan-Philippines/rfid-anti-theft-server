@@ -6,10 +6,24 @@ import type { PaginatedResponse } from '../../common/responses/paginated-api.res
 import { CreateKnownEpcDto } from './dto/create-known-epc.dto';
 import { ListKnownEpcsQueryDto } from './dto/list-known-epcs-query.dto';
 import { UpdateKnownEpcDto } from './dto/update-known-epc.dto';
+import { UnsellEpcsDto } from './dto/unsell-epcs.dto';
+import type { AuthenticatedUser } from '../auth/types/auth.types';
 
 export type KnownEpcCheckResult = {
   epc: string;
   sold: boolean;
+};
+
+export type UnsellResult = {
+  id: string;
+  actorUserId: string;
+  actorEmail: string;
+  reason: string | null;
+  requestedEpcs: string[];
+  unsoldEpcs: string[];
+  alreadyUnsoldEpcs: string[];
+  duplicateEpcsIgnored: number;
+  createdAt: Date;
 };
 
 @Injectable()
@@ -80,6 +94,38 @@ export class AntiTheftService {
 
     return this.prisma.knownEpc.create({
       data: { epc, label },
+    });
+  }
+
+  async unsellEpcs(dto: UnsellEpcsDto, actor: AuthenticatedUser): Promise<UnsellResult> {
+    const normalizedEpcs = dto.epcs.map((epc) => this.normalizeEpc(epc));
+    const requestedEpcs = [...new Set(normalizedEpcs)];
+    const duplicateEpcsIgnored = normalizedEpcs.length - requestedEpcs.length;
+
+    return this.prisma.$transaction(async (tx) => {
+      const soldRows = await tx.knownEpc.findMany({
+        where: { epc: { in: requestedEpcs } },
+        select: { epc: true },
+      });
+      const soldEpcs = new Set(soldRows.map((row) => row.epc));
+      const unsoldEpcs = requestedEpcs.filter((epc) => soldEpcs.has(epc));
+      const alreadyUnsoldEpcs = requestedEpcs.filter((epc) => !soldEpcs.has(epc));
+
+      if (unsoldEpcs.length > 0) {
+        await tx.knownEpc.deleteMany({ where: { epc: { in: unsoldEpcs } } });
+      }
+
+      return tx.unsellEvent.create({
+        data: {
+          actorUserId: actor.id,
+          actorEmail: actor.email,
+          reason: dto.reason ?? null,
+          requestedEpcs,
+          unsoldEpcs,
+          alreadyUnsoldEpcs,
+          duplicateEpcsIgnored,
+        },
+      });
     });
   }
 

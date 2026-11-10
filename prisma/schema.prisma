@@ -36,6 +36,23 @@ model KnownEpc {
   @@map("known_epcs")
 }
 
+model UnsellEvent {
+  id                            String                    @id @default(uuid())
+  actorUserId                   String                    @map("actor_user_id")
+  actorEmail                    String                    @map("actor_email")
+  reason                        String?
+  requestedEpcs                 String[]                  @map("requested_epcs")
+  unsoldEpcs                    String[]                  @map("unsold_epcs")
+  alreadyUnsoldEpcs             String[]                  @map("already_unsold_epcs")
+  duplicateEpcsIgnored          Int                       @map("duplicate_epcs_ignored")
+
+  createdAt                     DateTime                  @default(now()) @map("created_at")
+
+  @@index([actorUserId])
+  @@index([createdAt])
+  @@map("unsell_events")
+}
+
 model AlarmEvent {
   id                            String                    @id @default(uuid())
   epc                           String

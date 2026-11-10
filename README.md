@@ -65,6 +65,7 @@ There is no registration route. `bunx prisma db seed` creates the first user fro
 | GET | `/api/v1/alarms` | JWT |
 | GET | `/api/v1/anti-theft/known-epcs` | Open until a per-device key exists |
 | GET, POST | `/api/v1/anti-theft/epcs` | JWT |
+| POST | `/api/v1/anti-theft/epcs/unsell` | JWT |
 | GET, PATCH, DELETE | `/api/v1/anti-theft/epcs/:id` | JWT |
 
 Successful JSON is `{ "statusCode", "message": "Success", "data" }`. List routes put `{ "total", "page", "limit", "lastPage" }` on `data.meta`.
