@@ -19,6 +19,10 @@ Send a JWT in `Authorization: Bearer <token>` and JSON like:
 `epcs` must contain 1 to 200 strings. The server strips whitespace, uppercases each EPC and collapses duplicates.
 `reason` is optional and can contain at most 500 characters.
 
+If the header is missing, malformed, expired or does not contain a user identity, the server returns HTTP 401 with a
+message directing the caller to `POST /api/v1/auth/login`. The caller must not send an actor ID in the request body;
+the server reads it from the access token.
+
 ## Response
 
 The route returns HTTP 201. EPCs removed from `known_epcs` are in `unsoldEpcs`. EPCs that were already absent are in

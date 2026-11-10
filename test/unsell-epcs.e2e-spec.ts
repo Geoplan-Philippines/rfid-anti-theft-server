@@ -1,4 +1,5 @@
 import { INestApplication, VersioningType } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -11,6 +12,13 @@ const UNSELL_URL = '/api/v1/anti-theft/epcs/unsell';
 
 type ApiResponse<T> = {
   data: T;
+};
+
+type ErrorResponse = {
+  statusCode: number;
+  message: string;
+  error: string;
+  path: string;
 };
 
 function randomEpc(): string {
@@ -26,6 +34,7 @@ describe('Unsell EPCs (e2e)', () => {
   let app: INestApplication<App>;
   let server: ReturnType<INestApplication<App>['getHttpServer']>;
   let prisma: PrismaService;
+  let jwtService: JwtService;
   let token = '';
 
   beforeAll(async () => {
@@ -37,6 +46,7 @@ describe('Unsell EPCs (e2e)', () => {
 
     server = app.getHttpServer();
     prisma = app.get(PrismaService);
+    jwtService = app.get(JwtService);
     await prisma.knownEpc.createMany({ data: [{ epc: soldEpc }, { epc: otherSoldEpc }] });
 
     const login = await request(server)
@@ -54,7 +64,38 @@ describe('Unsell EPCs (e2e)', () => {
   });
 
   it('requires a JWT', async () => {
-    await request(server).post(UNSELL_URL).send({ epcs: [soldEpc] }).expect(401);
+    const response = await request(server).post(UNSELL_URL).send({ epcs: [soldEpc] }).expect(401);
+    const body = response.body as ErrorResponse;
+
+    expect(body).toMatchObject({
+      statusCode: 401,
+      error: 'Unauthorized',
+      path: UNSELL_URL,
+    });
+    expect(body.message).toContain('Sign in at POST /api/v1/auth/login');
+  });
+
+  it('rejects invalid tokens with a useful sign-in message', async () => {
+    const response = await request(server)
+      .post(UNSELL_URL)
+      .set(authHeader('not-a-valid-jwt'))
+      .send({ epcs: [soldEpc] })
+      .expect(401);
+    const body = response.body as ErrorResponse;
+
+    expect(body.message).toBe('Invalid access token. Sign in again at POST /api/v1/auth/login');
+  });
+
+  it('rejects signed tokens that do not contain a user identity', async () => {
+    const tokenWithoutUserId = await jwtService.signAsync({ email: ADMIN_EMAIL, role: 'ADMIN' });
+    const response = await request(server)
+      .post(UNSELL_URL)
+      .set(authHeader(tokenWithoutUserId))
+      .send({ epcs: [soldEpc] })
+      .expect(401);
+    const body = response.body as ErrorResponse;
+
+    expect(body.message).toBe('Access token is missing required user identity claims. Sign in again');
   });
 
   it('unsells a normalized batch, reports existing state and persists an audit event', async () => {

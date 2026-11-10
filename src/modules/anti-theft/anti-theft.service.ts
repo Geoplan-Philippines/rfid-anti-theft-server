@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import type { KnownEpc, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../core/database/prisma.service';
@@ -97,7 +97,11 @@ export class AntiTheftService {
     });
   }
 
-  async unsellEpcs(dto: UnsellEpcsDto, actor: AuthenticatedUser): Promise<UnsellResult> {
+  async unsellEpcs(dto: UnsellEpcsDto, actor: AuthenticatedUser | undefined): Promise<UnsellResult> {
+    if (!actor?.id?.trim() || !actor.email?.trim()) {
+      throw new UnauthorizedException('Authenticated user identity is missing. Sign in again');
+    }
+
     const normalizedEpcs = dto.epcs.map((epc) => this.normalizeEpc(epc));
     const requestedEpcs = [...new Set(normalizedEpcs)];
     const duplicateEpcsIgnored = normalizedEpcs.length - requestedEpcs.length;

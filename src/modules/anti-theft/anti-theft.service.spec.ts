@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../core/database/prisma.service';
 import { AntiTheftService, type UnsellResult } from './anti-theft.service';
@@ -154,5 +154,10 @@ describe('AntiTheftService.unsellEpcs', () => {
     expect(result.unsoldEpcs).toEqual([]);
     expect(result.alreadyUnsoldEpcs).toEqual([UNSOLD_EPC]);
     expect(result.reason).toBeNull();
+  });
+
+  it('rejects a missing authenticated user before opening a transaction', async () => {
+    await expect(service.unsellEpcs({ epcs: [SOLD_EPC] }, undefined)).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(transaction).not.toHaveBeenCalled();
   });
 });
