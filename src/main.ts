@@ -1,11 +1,11 @@
 import { NestFactory } from '@nestjs/core';
 import { VersioningType } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { join } from 'node:path';
 
 import helmet from 'helmet';
 
 import { AppModule } from './app.module';
+import { serveUploads } from './common/files/uploads';
 import { env } from './core/config/env.config';
 
 async function bootstrap() {
@@ -24,14 +24,8 @@ async function bootstrap() {
     }),
   );
 
-  // Serve captured CCTV images from /uploads/* with CORS and cross-origin CORP headers
-  app.useStaticAssets(join(process.cwd(), 'uploads'), {
-    prefix: '/uploads',
-    setHeaders: (res) => {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    },
-  });
+  // CCTV captures and store photos
+  serveUploads(app);
 
   app.enableCors({
     origin: env.CORS_ALLOWED_ORIGINS,

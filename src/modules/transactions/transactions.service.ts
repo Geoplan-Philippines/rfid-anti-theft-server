@@ -11,6 +11,8 @@ import {
 } from './transaction-payload';
 import { CreateTransactionDTO } from './dto/create-transaction.dto';
 import { ListTransactionsQueryDTO } from './dto/list-transactions-query.dto';
+import { normalizeStoreCode } from '../stores/store-code';
+import { StoresService } from '../stores/stores.service';
 
 const STORED_PAYLOAD_CONFLICT = 'This clientTransactionId was stored with a different body';
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -56,7 +58,13 @@ export type TransactionRecordResult = {
   result: RecordedTransaction;
 };
 
-export type TransactionSummary = {
+/** The registered store a sale's code matches right now. Worked out on every read, never stored on the sale. */
+export type StoreLink = {
+  storeName: string | null;
+  registered: boolean;
+};
+
+export type TransactionSummary = StoreLink & {
   id: string;
   storeCode: string;
   deviceId: string;
@@ -77,7 +85,10 @@ type StoreOutcome =
 
 @Injectable()
 export class TransactionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storesService: StoresService,
+  ) {}
 
   async recordTransaction(body: CreateTransactionDTO): Promise<TransactionRecordResult> {
     const canonical = canonicalizeTransaction(body);
@@ -112,7 +123,7 @@ export class TransactionsService {
     const skip = (page - 1) * limit;
     const where = this.buildTransactionWhere(query);
 
-    const [total, data] = await this.prisma.$transaction([
+    const [total, rows] = await this.prisma.$transaction([
       this.prisma.transaction.count({ where }),
       this.prisma.transaction.findMany({
         where,
@@ -130,9 +141,10 @@ export class TransactionsService {
         },
       }),
     ]);
+    const storeNames = await this.storesService.getStoreNamesByCodes(rows.map((row) => row.storeCode));
 
     return {
-      data,
+      data: rows.map((row) => withStoreLink(row, storeNames)),
       meta: {
         total,
         page,
@@ -165,7 +177,8 @@ export class TransactionsService {
       throw new NotFoundException('Transaction not found');
     }
 
-    return row;
+    const storeNames = await this.storesService.getStoreNamesByCodes([row.storeCode]);
+    return withStoreLink(row, storeNames);
   }
 
   private async storeOrReplay(tx: Prisma.TransactionClient, value: CanonicalTransaction): Promise<StoreOutcome> {
@@ -250,7 +263,8 @@ export class TransactionsService {
     const where: Prisma.TransactionWhereInput = {};
     const storeCode = query.storeCode?.trim();
     if (storeCode) {
-      where.storeCode = storeCode;
+      // Same rule as the store link: case does not matter.
+      where.storeCode = { equals: storeCode, mode: 'insensitive' };
     }
 
     const search = query.search?.trim();
@@ -269,6 +283,11 @@ export class TransactionsService {
 
     return where;
   }
+}
+
+function withStoreLink<T extends { storeCode: string }>(row: T, storeNames: Map<string, string>): T & StoreLink {
+  const storeName = storeNames.get(normalizeStoreCode(row.storeCode)) ?? null;
+  return { ...row, storeName, registered: storeName !== null };
 }
 
 function toRecorded(row: RecordedTransaction): RecordedTransaction {

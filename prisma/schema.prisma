@@ -102,6 +102,21 @@ model TransactionTag {
   @@map("transaction_tags")
 }
 
+// Sales keep the raw store code the till sent and link here at read time through normalizedCode (trimmed, uppercased). No foreign key, so adding or deleting a store relabels old sales without touching them.
+model Store {
+  id                            String                    @id @default(uuid())
+  code                          String
+  normalizedCode                String                    @unique @map("normalized_code")
+  name                          String
+  address                       String?
+  photoUrl                      String?                   @map("photo_url")
+
+  createdAt                     DateTime                  @default(now()) @map("created_at")
+  updatedAt                     DateTime                  @updatedAt @map("updated_at")
+
+  @@map("stores")
+}
+
 enum RoleEnum {
   SUPER_ADMIN
   ADMIN

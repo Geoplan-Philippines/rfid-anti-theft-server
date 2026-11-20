@@ -278,7 +278,7 @@ describe('Transactions (e2e)', () => {
     const transactions = await request(server).get('/api/v1/transactions').set(authHeader(token)).expect(200);
     const listed = transactions.body.data.data.find((item: { id: string }) => item.id === transactionId);
     expect(Object.keys(listed).sort()).toEqual(
-      ['cashierName', 'deviceId', 'endedAt', 'id', 'itemCount', 'startedAt', 'storeCode'].sort(),
+      ['cashierName', 'deviceId', 'endedAt', 'id', 'itemCount', 'registered', 'startedAt', 'storeCode', 'storeName'].sort(),
     );
   });
 

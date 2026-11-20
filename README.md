@@ -10,7 +10,11 @@ Dashboard reads of the sold list and of transactions require a JWT. Three routes
 - `POST /api/v1/alarms`
 - `GET /api/v1/anti-theft/known-epcs`
 
-The widget contract is `docs/widget-api.md`. The gate contract is `docs/gate-alarm-api.md`.
+The widget contract is `docs/widget-api.md`. The gate contract is `docs/gate-alarm-api.md`. The store registry is `docs/stores-api.md`.
+
+A sale keeps the store code the till sent. The sales list and the sale detail add `storeName` and `registered` by matching that code against `stores` when they are read, after trimming and ignoring case. Registering or deleting a store relabels old sales without changing them.
+
+Store photos are saved in `uploads/stores/` and CCTV snapshots in `uploads/captures/`. Both are served at `/uploads/*`. The `uploads` folder is not in git; the server creates it at startup.
 
 ## Run
 
@@ -67,6 +71,9 @@ There is no registration route. `bunx prisma db seed` creates the first user fro
 | GET, POST | `/api/v1/anti-theft/epcs` | JWT |
 | POST | `/api/v1/anti-theft/epcs/unsell` | JWT |
 | GET, PATCH, DELETE | `/api/v1/anti-theft/epcs/:id` | JWT |
+| GET, POST | `/api/v1/stores` | JWT |
+| GET, PATCH, DELETE | `/api/v1/stores/:id` | JWT |
+| GET | `/uploads/*` | Open. Store photos and CCTV snapshots |
 
 Successful JSON is `{ "statusCode", "message": "Success", "data" }`. List routes put `{ "total", "page", "limit", "lastPage" }` on `data.meta`.
 
@@ -78,12 +85,13 @@ Run the `scripts` in `package.json` with `bun run`.
 
 ```
 src/
-  common/          filters, the response interceptor, pagination
+  common/          filters, the response interceptor, pagination, uploads folder
   core/            env, Prisma, health, rate limit
   modules/
     alarms/        gate alarms
     anti-theft/    known_epcs, the sold list
     auth/
+    stores/        store registry and store photos
     transactions/  cashier sales
     users/
 prisma/
