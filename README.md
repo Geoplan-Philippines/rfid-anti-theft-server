@@ -4,11 +4,13 @@ This server records RFID tags sold at MUJI and decides which tags pass the gate.
 
 A cashier widget posts one sale to `POST /api/v1/transactions`. Every EPC in that sale is added to `known_epcs`. `known_epcs` is the sold list. A tag on that list passes the gate. Any other tag raises an alarm. A gate posts every tag it reads to `POST /api/v1/alarms`. A sold tag leaves no trace, and a tag that reads again inside `ALARM_COOLDOWN_SECONDS` does not raise a second alarm.
 
-Dashboard reads of the sold list and of transactions require a JWT. Three routes stay open until a per-device key exists.
+Dashboard reads of the sold list and of transactions require a JWT. The following machine-facing routes are open:
 
 - `POST /api/v1/transactions`
+- `POST /api/v1/anti-theft/epcs/unsell`
 - `POST /api/v1/alarms`
 - `GET /api/v1/anti-theft/known-epcs`
+- `POST /api/v1/anti-theft/known-epcs/check`
 
 The widget contract is `docs/widget-api.md`. The gate contract is `docs/gate-alarm-api.md`. The store registry is `docs/stores-api.md`.
 
@@ -69,13 +71,29 @@ There is no registration route. `bunx prisma db seed` creates the first user fro
 | GET | `/api/v1/alarms` | JWT |
 | GET | `/api/v1/anti-theft/known-epcs` | Open until a per-device key exists |
 | GET, POST | `/api/v1/anti-theft/epcs` | JWT |
-| POST | `/api/v1/anti-theft/epcs/unsell` | JWT |
+| POST | `/api/v1/anti-theft/epcs/unsell` | Open, like sale submission |
 | GET, PATCH, DELETE | `/api/v1/anti-theft/epcs/:id` | JWT |
 | GET, POST | `/api/v1/stores` | JWT |
 | GET, PATCH, DELETE | `/api/v1/stores/:id` | JWT |
 | GET | `/uploads/*` | Open. Store photos and CCTV snapshots |
 
 Successful JSON is `{ "statusCode", "message": "Success", "data" }`. List routes put `{ "total", "page", "limit", "lastPage" }` on `data.meta`.
+
+## Widget returns
+
+`POST /api/v1/anti-theft/epcs/unsell` is open like `POST /api/v1/transactions`.
+Send JSON `{ "epcs": ["<EPC>"], "reason": "Item Return" }` with no authentication headers,
+user ID, API key, or access token. The widget supplies the fixed reason automatically.
+The service no longer requires an authenticated actor. Audit events retain their existing fields,
+with `actorUserId` and `actorEmail` set to the explicit marker `unauthenticated`; no user is impersonated
+and no user record/configuration or schema migration is needed. Existing historical audits are unchanged.
+Any caller that can reach this route can unsell EPCs. Other protected endpoints retain JWT authentication.
+
+The previous `WIDGET_UNSELL_API_KEY` / `WIDGET_UNSELL_USER_ID` server settings and
+`HAX7700_UNSELL_API_KEY` / `HAX7700_UNSELL_ACCESS_TOKEN` widget settings are no longer used.
+They can be removed from your deployment environment. Keep `JWT_SECRET` for dashboard authentication.
+Restart the updated server and widgets; older pending return files resume without conversion.
+See `docs/unsell-tags-api.md` for request validation and response details.
 
 ## Scripts
 

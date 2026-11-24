@@ -1,32 +1,34 @@
 # Unsell tags
 
 Remove one or more EPCs from the sold list without deleting their transaction history. Every request writes an audit
-event containing the authenticated user, reason and outcome.
+event containing an explicit unauthenticated actor marker, reason and outcome.
 
 ## Request
 
 `POST /api/v1/anti-theft/epcs/unsell`
 
-Send a JWT in `Authorization: Bearer <token>` and JSON like:
+This route is open, matching sale submission. Send `Content-Type: application/json` and JSON like:
 
 ```json
 {
   "epcs": ["E28069950000AA039398B5EA"],
-  "reason": "Customer refund"
+  "reason": "Item Return"
 }
 ```
 
 `epcs` must contain 1 to 200 strings. The server strips whitespace, uppercases each EPC and collapses duplicates.
 `reason` is optional and can contain at most 500 characters.
 
-If the header is missing, malformed, expired or does not contain a user identity, the server returns HTTP 401 with a
-message directing the caller to `POST /api/v1/auth/login`. The caller must not send an actor ID in the request body;
-the server reads it from the access token.
+No API key, access token, login, or user ID is required. Authentication headers are not used.
+The widget always supplies `reason: "Item Return"`. No actor ID is accepted in the request body.
+The server stores `unauthenticated` in both existing actor fields; these markers are not user identities.
+Any caller that can reach the route can unsell items. Other protected endpoints still require JWT.
 
 ## Response
 
 The route returns HTTP 201. EPCs removed from `known_epcs` are in `unsoldEpcs`. EPCs that were already absent are in
-`alreadyUnsoldEpcs`, so retrying the request is safe.
+`alreadyUnsoldEpcs`. A retry after a lost reply normally reports the EPC as already unsold.
+There is no return-ID deduplication: if another till sells that EPC before the retry, the retry can unsell it again.
 
 ```json
 {
@@ -34,9 +36,9 @@ The route returns HTTP 201. EPCs removed from `known_epcs` are in `unsoldEpcs`. 
   "message": "Success",
   "data": {
     "id": "34c392a4-a438-4208-b6e0-0584bd8d9dfd",
-    "actorUserId": "d2cf551c-fbde-469e-809f-a5c9988b3420",
-    "actorEmail": "admin@example.com",
-    "reason": "Customer refund",
+    "actorUserId": "unauthenticated",
+    "actorEmail": "unauthenticated",
+    "reason": "Item Return",
     "requestedEpcs": ["E28069950000AA039398B5EA"],
     "unsoldEpcs": ["E28069950000AA039398B5EA"],
     "alreadyUnsoldEpcs": [],

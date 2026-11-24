@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { KnownEpc, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../core/database/prisma.service';
@@ -7,7 +7,6 @@ import { CreateKnownEpcDto } from './dto/create-known-epc.dto';
 import { ListKnownEpcsQueryDto } from './dto/list-known-epcs-query.dto';
 import { UpdateKnownEpcDto } from './dto/update-known-epc.dto';
 import { UnsellEpcsDto } from './dto/unsell-epcs.dto';
-import type { AuthenticatedUser } from '../auth/types/auth.types';
 
 export type KnownEpcCheckResult = {
   epc: string;
@@ -97,10 +96,7 @@ export class AntiTheftService {
     });
   }
 
-  async unsellEpcs(dto: UnsellEpcsDto, actor: AuthenticatedUser | undefined): Promise<UnsellResult> {
-    if (!actor?.id?.trim() || !actor.email?.trim()) {
-      throw new UnauthorizedException('Authenticated user identity is missing. Sign in again');
-    }
+  async unsellEpcs(dto: UnsellEpcsDto): Promise<UnsellResult> {
 
     const normalizedEpcs = dto.epcs.map((epc) => this.normalizeEpc(epc));
     const requestedEpcs = [...new Set(normalizedEpcs)];
@@ -121,8 +117,10 @@ export class AntiTheftService {
 
       return tx.unsellEvent.create({
         data: {
-          actorUserId: actor.id,
-          actorEmail: actor.email,
+          // Explicit anonymous markers preserve the existing non-null audit schema.
+          // These are not user identities and do not refer to a User record.
+          actorUserId: 'unauthenticated',
+          actorEmail: 'unauthenticated',
           reason: dto.reason ?? null,
           requestedEpcs,
           unsoldEpcs,

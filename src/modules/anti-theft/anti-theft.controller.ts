@@ -2,9 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post
 import { Throttle } from '@nestjs/throttler';
 import type { KnownEpc } from '@prisma/client';
 import type { PaginatedResponse } from '../../common/responses/paginated-api.response';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PassportJwtGuard } from '../auth/guards/passport-jwt.guard';
-import type { AuthenticatedUser } from '../auth/types/auth.types';
 import { AntiTheftService, type KnownEpcCheckResult, type UnsellResult } from './anti-theft.service';
 import { CheckKnownEpcsDto } from './dto/check-known-epcs.dto';
 import { CreateKnownEpcDto } from './dto/create-known-epc.dto';
@@ -57,13 +55,10 @@ export class AntiTheftController {
     return this.antiTheftService.createEpcRecord(body);
   }
 
+  // Open machine endpoint, matching sale submission. No user or credential is required.
   @Post('epcs/unsell')
-  @UseGuards(PassportJwtGuard)
-  async unsellEpcs(
-    @Body() body: UnsellEpcsDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<UnsellResult> {
-    return this.antiTheftService.unsellEpcs(body, user);
+  async unsellEpcs(@Body() body: UnsellEpcsDto): Promise<UnsellResult> {
+    return this.antiTheftService.unsellEpcs(body);
   }
 
   @Patch('epcs/:id')

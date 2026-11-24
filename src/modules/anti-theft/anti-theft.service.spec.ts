@@ -1,4 +1,4 @@
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../core/database/prisma.service';
 import { AntiTheftService, type UnsellResult } from './anti-theft.service';
@@ -94,7 +94,6 @@ describe('AntiTheftService.unsellEpcs', () => {
   });
 
   it('normalizes and deduplicates EPCs, removes sold rows and writes the audit event', async () => {
-    const actor = { id: 'user-1', email: 'admin@example.com', role: 'ADMIN' as const };
     const createdAt = new Date('2026-11-10T01:00:00.000Z');
     findMany.mockResolvedValue([{ epc: SOLD_EPC }]);
     deleteMany.mockResolvedValue({ count: 1 });
@@ -105,7 +104,6 @@ describe('AntiTheftService.unsellEpcs', () => {
         epcs: [` ${SOLD_EPC.toLowerCase()} `, UNSOLD_EPC, SOLD_EPC],
         reason: 'Customer refund',
       },
-      actor,
     );
 
     expect(findMany).toHaveBeenCalledWith({
@@ -115,8 +113,8 @@ describe('AntiTheftService.unsellEpcs', () => {
     expect(deleteMany).toHaveBeenCalledWith({ where: { epc: { in: [SOLD_EPC] } } });
     expect(createEvent).toHaveBeenCalledWith({
       data: {
-        actorUserId: actor.id,
-        actorEmail: actor.email,
+        actorUserId: 'unauthenticated',
+        actorEmail: 'unauthenticated',
         reason: 'Customer refund',
         requestedEpcs: [SOLD_EPC, UNSOLD_EPC],
         unsoldEpcs: [SOLD_EPC],
@@ -126,8 +124,8 @@ describe('AntiTheftService.unsellEpcs', () => {
     });
     expect(result).toEqual<UnsellResult>({
       id: 'event-1',
-      actorUserId: actor.id,
-      actorEmail: actor.email,
+      actorUserId: 'unauthenticated',
+      actorEmail: 'unauthenticated',
       reason: 'Customer refund',
       requestedEpcs: [SOLD_EPC, UNSOLD_EPC],
       unsoldEpcs: [SOLD_EPC],
@@ -137,7 +135,7 @@ describe('AntiTheftService.unsellEpcs', () => {
     });
   });
 
-  it('records an idempotent retry without issuing an empty delete', async () => {
+  it('records an already-unsold retry without issuing an empty delete', async () => {
     findMany.mockResolvedValue([]);
     createEvent.mockImplementation(({ data }) => Promise.resolve({
       id: 'event-2',
@@ -147,7 +145,6 @@ describe('AntiTheftService.unsellEpcs', () => {
 
     const result = await service.unsellEpcs(
       { epcs: [UNSOLD_EPC] },
-      { id: 'user-1', email: 'admin@example.com', role: 'ADMIN' },
     );
 
     expect(deleteMany).not.toHaveBeenCalled();
@@ -156,8 +153,13 @@ describe('AntiTheftService.unsellEpcs', () => {
     expect(result.reason).toBeNull();
   });
 
-  it('rejects a missing authenticated user before opening a transaction', async () => {
-    await expect(service.unsellEpcs({ epcs: [SOLD_EPC] }, undefined)).rejects.toBeInstanceOf(UnauthorizedException);
-    expect(transaction).not.toHaveBeenCalled();
+  it('does not require an authenticated user and records an explicit anonymous actor', async () => {
+    findMany.mockResolvedValue([{ epc: SOLD_EPC }]);
+    createEvent.mockImplementation(({ data }) => Promise.resolve(data));
+    const result = await service.unsellEpcs({ epcs: [SOLD_EPC], reason: 'Item Return' });
+    expect(result.actorUserId).toBe('unauthenticated');
+    expect(result.actorEmail).toBe('unauthenticated');
+    expect(result.unsoldEpcs).toEqual([SOLD_EPC]);
+    expect(transaction).toHaveBeenCalledTimes(1);
   });
 });
